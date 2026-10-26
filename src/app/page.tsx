@@ -1,69 +1,143 @@
-import Image from "next/image";
+'use client'
+
+import { useState } from 'react'
+
+type TipoBusqueda = 'telefono' | 'nombre_telcel' | 'curp' | 'nombre_ines' | 'cruce'
+
+const TIPOS = [
+  { value: 'telefono',      label: '📱 Teléfono',        placeholder: 'Ej: 6121004768' },
+  { value: 'nombre_telcel', label: '👤 Nombre (Telcel)', placeholder: 'Ej: GARCIA LOPEZ' },
+  { value: 'curp',          label: '🪪 CURP (INES)',     placeholder: 'Ej: GALB580627MSRRPL04' },
+  { value: 'nombre_ines',   label: '📋 Nombre (INES)',   placeholder: 'Ej: GARCIA' },
+  { value: 'cruce',         label: '🔗 Cruce Tel+INES',  placeholder: 'CURP para cruzar' },
+]
 
 export default function Home() {
+  const [tipo, setTipo] = useState<TipoBusqueda>('telefono')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [results, setResults] = useState<Record<string, string>[]>([])
+  const [count, setCount] = useState<number | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const buscar = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!searchQuery.trim()) return
+    setLoading(true)
+    setError('')
+    setResults([])
+    setCount(null)
+
+    try {
+      const res = await fetch(`/api/buscar?tipo=${tipo}&q=${encodeURIComponent(searchQuery)}`)
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error || 'Error desconocido')
+      } else {
+        setResults(data.results)
+        setCount(data.count)
+      }
+    } catch {
+      setError('Error de conexión')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const tipoActual = TIPOS.find(t => t.value === tipo)
+  const columnas = results.length > 0 ? Object.keys(results[0]) : []
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="min-h-screen bg-gray-950 text-gray-100">
+      <div className="bg-gray-900 border-b border-gray-800 px-6 py-4">
+        <h1 className="text-2xl font-bold text-white">
+          <span className="text-blue-400">Buexar</span> — Buscador de Datos
+        </h1>
+        <p className="text-gray-400 text-sm mt-1">
+          Telcel: 31.4M registros · INES (BCN+BCS): 6.5M registros
+        </p>
+      </div>
+
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="flex flex-wrap gap-2 mb-6">
+          {TIPOS.map(t => (
+            <button
+              key={t.value}
+              onClick={() => { setTipo(t.value as TipoBusqueda); setResults([]); setCount(null) }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                tipo === t.value
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <form onSubmit={buscar} className="flex gap-3 mb-8">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={tipoActual?.placeholder}
+            className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 text-lg"
+          />
+          <button
+            type="submit"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
+          >
+            {loading ? 'Buscando…' : 'Buscar'}
+          </button>
+        </form>
+
+        {error && (
+          <div className="bg-red-900/40 border border-red-700 text-red-300 px-4 py-3 rounded-lg mb-6">
+            {error}
+          </div>
+        )}
+
+        {count !== null && (
+          <p className="text-gray-400 text-sm mb-4">
+            {count === 0
+              ? 'Sin resultados'
+              : `${count} resultado${count !== 1 ? 's' : ''}${count === 50 ? ' (mostrando primeros 50)' : ''}`}
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
+        )}
+
+        {results.length > 0 && (
+          <div className="overflow-x-auto rounded-xl border border-gray-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-800 text-gray-300">
+                  {columnas.map(col => (
+                    <th key={col} className="px-4 py-3 text-left font-semibold uppercase tracking-wide text-xs">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((row, i) => (
+                  <tr
+                    key={i}
+                    className={`border-t border-gray-800 hover:bg-gray-800/50 transition-colors ${
+                      i % 2 === 0 ? 'bg-gray-900' : 'bg-gray-900/50'
+                    }`}
+                  >
+                    {columnas.map(col => (
+                      <td key={col} className="px-4 py-3 text-gray-300 whitespace-nowrap">
+                        {row[col] ?? <span className="text-gray-600">—</span>}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </main>
+  )
 }
